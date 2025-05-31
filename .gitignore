@@ -1,0 +1,72 @@
+# .NET build outputs
+src/backend/bin/
+src/backend/obj/
+*.dll
+*.exe
+*.pdb
+*.cache
+
+# User-specific files
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+
+# Build results
+[Dd]ebug/
+[Dd]ebugPublic/
+[Rr]elease/
+[Rr]eleases/
+x64/
+x86/
+[Aa][Rr][Mm]/
+[Aa][Rr][Mm]64/
+bld/
+[Bb]in/
+[Oo]bj/
+[Ll]og/
+
+# Visual Studio files
+.vscode
+.vs/
+*.vsidx
+*.vspscc
+*_i.c
+*_p.c
+*.tlb
+*.tmp
+*.log
+
+# NuGet
+packages/
+*.nupkg
+*.snupkg
+
+# Entity Framework
+*.mdf
+*.ldf
+
+# Frontend (if using Node.js/npm)
+src/frontend/node_modules/
+src/frontend/dist/
+src/frontend/build/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Environment files
+.env
+.env.local
+.env.production
+.env.staging
+src/backend/appsettings.Development.json
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
