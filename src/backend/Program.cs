@@ -1,49 +1,12 @@
-using System.Text;
-using backend.Database;
-using backend.Entities;
+using backend;
 using backend.Extensions;
-using backend.Services;
-using backend.Settings;
-using Microsoft.AspNetCore.Authentication.JwtBearer;
-using Microsoft.AspNetCore.Identity;
-using Microsoft.EntityFrameworkCore;
-using Microsoft.IdentityModel.Tokens;
-
-var builder = WebApplication.CreateBuilder(args);
 
 
-builder.Services.AddControllers();
+WebApplicationBuilder builder = WebApplication.CreateBuilder(args);
 
-builder.Services.AddIdentity<User, IdentityRole>()
-.AddEntityFrameworkStores<ApplicationDbContext>();
-
-builder.Services.AddDbContext<ApplicationDbContext>(options =>
-    options.UseNpgsql(builder.Configuration.GetConnectionString("Database")));
-
-builder.Services.Configure<JwtAuthOptions>(builder.Configuration.GetSection("Jwt"));
-
-JwtAuthOptions jwtAuthOptions = builder.Configuration.GetSection("Jwt").Get<JwtAuthOptions>()!;
-
-builder.Services
-    .AddAuthentication(options =>
-    {
-        options.DefaultAuthenticateScheme = JwtBearerDefaults.AuthenticationScheme;
-        options.DefaultChallengeScheme = JwtBearerDefaults.AuthenticationScheme;
-    })
-    .AddJwtBearer(options =>
-    {
-        options.TokenValidationParameters = new TokenValidationParameters
-        {
-            ValidIssuer = jwtAuthOptions.Issuer,
-            ValidAudience = jwtAuthOptions.Audience,
-            IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtAuthOptions.Key)),
-            
-        };
-    });
-
-builder.Services.AddTransient<TokenProvider>();    
-
-builder.Services.AddOpenApi();
+builder
+    .AddControllers()
+    .AddAuthentication();
 
 var app = builder.Build();
 
