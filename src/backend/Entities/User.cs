@@ -4,5 +4,4 @@ namespace backend.Entities;
 
 public sealed class User : IdentityUser 
 {
-    
 }

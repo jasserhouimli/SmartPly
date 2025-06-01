@@ -17,13 +17,25 @@ public static class DependencyInjection
 
         builder.Services.AddOpenApi();
 
+        builder.Services.AddCors(options =>
+        {
+            options.AddPolicy("AllowFrontend", policy =>
+            {
+                policy.WithOrigins("http://localhost:5173") 
+                      .AllowAnyMethod()
+                      .AllowAnyHeader()
+                      .AllowCredentials(); 
+            });
+        });
+
         return builder;
     }
 
     public static WebApplicationBuilder AddAuthentication(this WebApplicationBuilder builder)
     {
         builder.Services.AddIdentity<User, IdentityRole>()
-        .AddEntityFrameworkStores<ApplicationDbContext>();
+        .AddEntityFrameworkStores<ApplicationDbContext>()
+        .AddDefaultTokenProviders();
 
         builder.Services.AddDbContext<ApplicationDbContext>(options =>
             options.UseNpgsql(builder.Configuration.GetConnectionString("Database")));
@@ -37,6 +49,7 @@ public static class DependencyInjection
             {
                 options.DefaultAuthenticateScheme = JwtBearerDefaults.AuthenticationScheme;
                 options.DefaultChallengeScheme = JwtBearerDefaults.AuthenticationScheme;
+                
             })
             .AddJwtBearer(options =>
             {
@@ -47,6 +60,12 @@ public static class DependencyInjection
                     IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtAuthOptions.Key)),
 
                 };
+            })
+            .AddGoogle(options =>
+            {
+                options.ClientId = builder.Configuration["Google:ClientId"]!;
+                options.ClientSecret = builder.Configuration["Google:ClientSecret"]!;
+                options.CallbackPath = "/signin-google";
             });
 
         builder.Services.AddTransient<TokenProvider>();
