@@ -197,7 +197,6 @@ public class GmailController : ControllerBase
     {
         try
         {
-            // Create a Gmail service using the access token
             var credential = GoogleCredential.FromAccessToken(accessToken)
                 .CreateScoped(GmailService.Scope.GmailReadonly);
 
@@ -207,7 +206,6 @@ public class GmailController : ControllerBase
                 ApplicationName = "SmartPly"
             });
 
-            // Get the list of messages
             var messageListRequest = service.Users.Messages.List("me");
             messageListRequest.MaxResults = 10;
             var messageList = await messageListRequest.ExecuteAsync();
@@ -220,16 +218,13 @@ public class GmailController : ControllerBase
 
             var emails = new List<EmailMessageDto>();
 
-            // Process each message
             foreach (var messageRef in messageList.Messages)
             {
                 try
                 {
-                    // Get message details
                     var messageRequest = service.Users.Messages.Get("me", messageRef.Id);
                     var message = await messageRequest.ExecuteAsync();
 
-                    // Extract headers
                     string subject = GetHeader(message.Payload.Headers, "Subject");
                     string from = GetHeader(message.Payload.Headers, "From");
                     string date = GetHeader(message.Payload.Headers, "Date");
@@ -243,11 +238,9 @@ public class GmailController : ControllerBase
                         Snippet = message.Snippet ?? string.Empty
                     };
 
-                    // Extract body content
                     string body = string.Empty;
                     if (message.Payload.Parts != null)
                     {
-                        // Handle multipart message
                         foreach (var part in message.Payload.Parts)
                         {
                             if (part.MimeType == "text/plain" && !string.IsNullOrEmpty(part.Body.Data))
@@ -267,7 +260,6 @@ public class GmailController : ControllerBase
                     }
                     else if (message.Payload.Body?.Data != null)
                     {
-                        // Handle simple message
                         try
                         {
                             body = DecodeBase64UrlSafe(message.Payload.Body.Data);

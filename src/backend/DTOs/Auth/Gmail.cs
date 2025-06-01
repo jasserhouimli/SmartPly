@@ -1,4 +1,3 @@
-// These custom Gmail DTOs are no longer needed since we're using Google.Apis.Gmail.v1 library
 
 public class EmailMessageDto
 {
