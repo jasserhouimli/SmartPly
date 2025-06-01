@@ -26,7 +26,6 @@ public sealed class AuthController(
 {
     private readonly JwtAuthOptions _jwtAuthOptions = options.Value;
 
-
     [HttpPost("register")]
     public async Task<IActionResult> Register(RegisterUserDto registerUserDto)
     {
@@ -168,7 +167,7 @@ public sealed class AuthController(
 
         applicationDbContext.RefreshTokens.Add(refreshToken);
         await applicationDbContext.SaveChangesAsync();
-        
+
         var frontendUrl = $"http://localhost:5173?" +
                                 $"access_token={accessTokens.AccessToken}&" +
                                 $"refresh_token={accessTokens.RefreshToken}";

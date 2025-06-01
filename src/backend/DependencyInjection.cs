@@ -65,7 +65,6 @@ public static class DependencyInjection
             {
                 options.ClientId = builder.Configuration["Google:ClientId"]!;
                 options.ClientSecret = builder.Configuration["Google:ClientSecret"]!;
-                options.CallbackPath = "/signin-google";
             });
 
         builder.Services.AddTransient<TokenProvider>();
