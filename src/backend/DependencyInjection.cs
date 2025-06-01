@@ -70,7 +70,6 @@ public static class DependencyInjection
 
         builder.Services.AddTransient<TokenProvider>();
         
-        // Add HttpClientFactory for making HTTP requests
         builder.Services.AddHttpClient();
 
         return builder;
