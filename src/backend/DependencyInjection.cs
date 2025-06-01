@@ -21,10 +21,10 @@ public static class DependencyInjection
         {
             options.AddPolicy("AllowFrontend", policy =>
             {
-                policy.WithOrigins("http://localhost:5173") 
+                policy.WithOrigins(["http://localhost:5173", "https://localhost:5173"])
                       .AllowAnyMethod()
                       .AllowAnyHeader()
-                      .AllowCredentials(); 
+                      .AllowCredentials();
             });
         });
 
@@ -49,7 +49,7 @@ public static class DependencyInjection
             {
                 options.DefaultAuthenticateScheme = JwtBearerDefaults.AuthenticationScheme;
                 options.DefaultChallengeScheme = JwtBearerDefaults.AuthenticationScheme;
-                
+
             })
             .AddJwtBearer(options =>
             {
@@ -65,11 +65,14 @@ public static class DependencyInjection
             {
                 options.ClientId = builder.Configuration["Google:ClientId"]!;
                 options.ClientSecret = builder.Configuration["Google:ClientSecret"]!;
-                options.CallbackPath = "/signin-google";
+
             });
 
         builder.Services.AddTransient<TokenProvider>();
+        
+        // Add HttpClientFactory for making HTTP requests
+        builder.Services.AddHttpClient();
 
-        return builder; 
+        return builder;
     }
 }

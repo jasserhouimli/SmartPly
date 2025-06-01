@@ -40,7 +40,7 @@ public sealed class AuthController(
 
         if (!result.Succeeded)
         {
-            // add Proper Error Handling Later 
+            // add Proper Error Handling Later
             foreach (var e in result.Errors)
                 ModelState.AddModelError(e.Code, e.Description);
             return ValidationProblem(ModelState);
@@ -83,7 +83,7 @@ public sealed class AuthController(
             Token = accessTokens.RefreshToken,
             ExpiresAtUtc = DateTime.UtcNow.AddDays(_jwtAuthOptions.RefreshTokenExpirationDays)
         };
-        // you are not removing previous refresh Tokens 
+        // you are not removing previous refresh Tokens
         applicationDbContext.RefreshTokens.Add(refreshToken);
 
         await applicationDbContext.SaveChangesAsync();
@@ -123,7 +123,7 @@ public sealed class AuthController(
     {
         var clientId = configuration["Google:ClientId"];
         var redirectUri = configuration["Google:RedirectUri"];
-        var scope = "openid profile email";
+        var scope = configuration["Google:Scopes"] ?? "openid profile email https://www.googleapis.com/auth/gmail.readonly";
         var state = Guid.NewGuid().ToString();
 
         var authUrl = $"https://accounts.google.com/o/oauth2/v2/auth?" +
@@ -131,7 +131,9 @@ public sealed class AuthController(
                      $"redirect_uri={Uri.EscapeDataString(redirectUri)}&" +
                      $"scope={Uri.EscapeDataString(scope)}&" +
                      $"response_type=code&" +
-                     $"state={state}";
+                     $"state={state}&" +
+                     $"access_type=offline&" +
+                     $"prompt=consent";
 
         return Ok(new { AuthorizationUrl = authUrl });
     }
@@ -155,6 +157,8 @@ public sealed class AuthController(
 
         var user = await FindOrCreateUser(googleUser);
 
+        await StoreGoogleTokens(user, tokens);
+
         var tokenRequest = new TokenRequest(user.Id, user.Email!);
         var accessTokens = tokenProvider.Create(tokenRequest);
 
@@ -168,12 +172,11 @@ public sealed class AuthController(
 
         applicationDbContext.RefreshTokens.Add(refreshToken);
         await applicationDbContext.SaveChangesAsync();
-        
+
         var frontendUrl = $"http://localhost:5173?" +
                                 $"access_token={accessTokens.AccessToken}&" +
                                 $"refresh_token={accessTokens.RefreshToken}";
-        Redirect(frontendUrl);
-        return Ok(accessTokens);
+        return Redirect(frontendUrl);
 
     }
     private async Task<GoogleTokenResponse> ExchangeCodeForTokens(string code)
@@ -183,7 +186,7 @@ public sealed class AuthController(
         var redirectUri = configuration["Google:RedirectUri"];
 
         using var httpClient = new HttpClient();
-        
+
         var tokenRequest = new FormUrlEncodedContent(new[]
         {
             new KeyValuePair<string, string>("code", code),
@@ -212,7 +215,7 @@ public sealed class AuthController(
     private async Task<GoogleUserInfo> GetGoogleUserInfo(string idToken)
     {
         var payload = await GoogleJsonWebSignature.ValidateAsync(idToken);
-        
+
         return new GoogleUserInfo
         {
             Id = payload.Subject,
@@ -224,12 +227,47 @@ public sealed class AuthController(
         };
     }
 
+    private async Task StoreGoogleTokens(User user, GoogleTokenResponse tokens)
+    {
+        // Store access token
+        await userManager.SetAuthenticationTokenAsync(
+            user,
+            "Google",
+            "access_token",
+            tokens.AccessToken);
+
+        // Store refresh token if available
+        if (!string.IsNullOrEmpty(tokens.RefreshToken))
+        {
+            await userManager.SetAuthenticationTokenAsync(
+                user,
+                "Google",
+                "refresh_token",
+                tokens.RefreshToken);
+        }
+
+        // Store token expiration (optional but recommended)
+        var expiresAt = DateTime.UtcNow.AddSeconds(tokens.ExpiresIn);
+        await userManager.SetAuthenticationTokenAsync(
+            user,
+            "Google",
+            "expires_at",
+            expiresAt.ToString("O"));
+
+        // Store ID token (optional)
+        await userManager.SetAuthenticationTokenAsync(
+            user,
+            "Google",
+            "id_token",
+            tokens.IdToken);
+    }
+
     private async Task<User> FindOrCreateUser(GoogleUserInfo googleUser)
     {
         var loginInfo = new UserLoginInfo("Google", googleUser.Id, "Google");
 
         var user = await userManager.FindByLoginAsync(loginInfo.LoginProvider, loginInfo.ProviderKey);
-        
+
         if (user != null)
         {
             if (user.Email != googleUser.Email)
@@ -242,7 +280,7 @@ public sealed class AuthController(
         }
 
         user = await userManager.FindByEmailAsync(googleUser.Email);
-        
+
         if (user != null)
         {
             var addLoginResult = await userManager.AddLoginAsync(user, loginInfo);
