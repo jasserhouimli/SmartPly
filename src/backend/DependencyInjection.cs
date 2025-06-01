@@ -21,10 +21,10 @@ public static class DependencyInjection
         {
             options.AddPolicy("AllowFrontend", policy =>
             {
-                policy.WithOrigins("http://localhost:5173") 
+                policy.WithOrigins(["http://localhost:5173", "https://localhost:5173"])
                       .AllowAnyMethod()
                       .AllowAnyHeader()
-                      .AllowCredentials(); 
+                      .AllowCredentials();
             });
         });
 
@@ -49,7 +49,7 @@ public static class DependencyInjection
             {
                 options.DefaultAuthenticateScheme = JwtBearerDefaults.AuthenticationScheme;
                 options.DefaultChallengeScheme = JwtBearerDefaults.AuthenticationScheme;
-                
+
             })
             .AddJwtBearer(options =>
             {
@@ -68,7 +68,9 @@ public static class DependencyInjection
             });
 
         builder.Services.AddTransient<TokenProvider>();
+        
+        builder.Services.AddHttpClient();
 
-        return builder; 
+        return builder;
     }
 }
