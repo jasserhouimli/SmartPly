@@ -194,7 +194,7 @@ public class GmailController : ControllerBase
             httpClient.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", accessToken);
 
 
-            var listResponse = await httpClient.GetAsync("https://www.googleapis.com/gmail/v1/users/me/messages?maxResults=50");
+            var listResponse = await httpClient.GetAsync("https://www.googleapis.com/gmail/v1/users/me/messages?maxResults=10");
 
             if (!listResponse.IsSuccessStatusCode)
             {
