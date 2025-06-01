@@ -2,6 +2,13 @@ using System.Text;
 using System.Text.Json;
 using backend.DTOs;
 using backend.Entities;
+using Google.Apis.Auth.OAuth2;
+using Google.Apis.Auth.OAuth2.Flows;
+using Google.Apis.Auth.OAuth2.Responses;
+using Google.Apis.Gmail.v1;
+using Google.Apis.Gmail.v1.Data;
+using Google.Apis.Services;
+using Google.Apis.Util.Store;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
@@ -190,32 +197,22 @@ public class GmailController : ControllerBase
     {
         try
         {
-            var httpClient = _httpClientFactory.CreateClient();
-            httpClient.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", accessToken);
+            // Create a Gmail service using the access token
+            var credential = GoogleCredential.FromAccessToken(accessToken)
+                .CreateScoped(GmailService.Scope.GmailReadonly);
 
-
-            var listResponse = await httpClient.GetAsync("https://www.googleapis.com/gmail/v1/users/me/messages?maxResults=10");
-
-            if (!listResponse.IsSuccessStatusCode)
+            var service = new GmailService(new BaseClientService.Initializer
             {
-                var errorContent = await listResponse.Content.ReadAsStringAsync();
-                _logger.LogError("Failed to list Gmail messages: Status {StatusCode}, Response: {Response}",
-                    listResponse.StatusCode, errorContent);
-                throw new Exception($"Failed to list messages: {listResponse.StatusCode}");
-            }
+                HttpClientInitializer = credential,
+                ApplicationName = "SmartPly"
+            });
 
-            var listContent = await listResponse.Content.ReadAsStringAsync();
-            _logger.LogDebug("Gmail API List Response: {Response}", listContent);
+            // Get the list of messages
+            var messageListRequest = service.Users.Messages.List("me");
+            messageListRequest.MaxResults = 10;
+            var messageList = await messageListRequest.ExecuteAsync();
 
-            var options = new JsonSerializerOptions
-            {
-                PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
-                PropertyNameCaseInsensitive = true
-            };
-
-            var messagesListResponse = JsonSerializer.Deserialize<GmailMessagesListResponse>(listContent, options);
-
-            if (messagesListResponse?.Messages == null)
+            if (messageList.Messages == null || !messageList.Messages.Any())
             {
                 _logger.LogInformation("No messages found in Gmail account");
                 return new List<EmailMessageDto>();
@@ -223,83 +220,75 @@ public class GmailController : ControllerBase
 
             var emails = new List<EmailMessageDto>();
 
-
-            foreach (var message in messagesListResponse.Messages)
+            // Process each message
+            foreach (var messageRef in messageList.Messages)
             {
                 try
                 {
-                    var detailResponse = await httpClient.GetAsync($"https://www.googleapis.com/gmail/v1/users/me/messages/{message.Id}");
-                    if (!detailResponse.IsSuccessStatusCode)
+                    // Get message details
+                    var messageRequest = service.Users.Messages.Get("me", messageRef.Id);
+                    var message = await messageRequest.ExecuteAsync();
+
+                    // Extract headers
+                    string subject = GetHeader(message.Payload.Headers, "Subject");
+                    string from = GetHeader(message.Payload.Headers, "From");
+                    string date = GetHeader(message.Payload.Headers, "Date");
+
+                    var email = new EmailMessageDto
                     {
-                        var errorDetail = await detailResponse.Content.ReadAsStringAsync();
-                        _logger.LogWarning("Failed to get message details for ID: {MessageId}, Status: {StatusCode}, Response: {Response}",
-                            message.Id, detailResponse.StatusCode, errorDetail);
-                        continue;
-                    }
+                        Id = message.Id,
+                        Subject = subject,
+                        From = from,
+                        Date = date,
+                        Snippet = message.Snippet ?? string.Empty
+                    };
 
-                    var detailContent = await detailResponse.Content.ReadAsStringAsync();
-                    var messageDetail = JsonSerializer.Deserialize<GmailMessageDetail>(detailContent, options);
-
-                    if (messageDetail != null)
+                    // Extract body content
+                    string body = string.Empty;
+                    if (message.Payload.Parts != null)
                     {
-                        var email = new EmailMessageDto
+                        // Handle multipart message
+                        foreach (var part in message.Payload.Parts)
                         {
-                            Id = messageDetail.Id,
-                            Subject = GetHeaderValue(messageDetail, "Subject"),
-                            From = GetHeaderValue(messageDetail, "From"),
-                            Date = GetHeaderValue(messageDetail, "Date"),
-                            Snippet = messageDetail.Snippet ?? string.Empty
-                        };
-
-
-                        if (messageDetail.Payload?.Parts != null)
-                        {
-                            foreach (var part in messageDetail.Payload.Parts)
+                            if (part.MimeType == "text/plain" && !string.IsNullOrEmpty(part.Body.Data))
                             {
-                                if (part.MimeType == "text/plain" && !string.IsNullOrEmpty(part.Body?.Data))
+                                try
                                 {
-                                    try
-                                    {
-                                        email.Body = DecodeBase64UrlSafe(part.Body.Data);
-                                        break;
-                                    }
-                                    catch (Exception ex)
-                                    {
-                                        _logger.LogWarning("Failed to decode email body: {Error}", ex.Message);
-                                        email.Body = "[Body could not be decoded]";
-                                    }
+                                    body = DecodeBase64UrlSafe(part.Body.Data);
+                                    break;
+                                }
+                                catch (Exception ex)
+                                {
+                                    _logger.LogWarning("Failed to decode email body: {Error}", ex.Message);
+                                    body = "[Body could not be decoded]";
                                 }
                             }
                         }
-                        else if (messageDetail.Payload?.Body?.Data != null)
-                        {
-                            try
-                            {
-                                email.Body = DecodeBase64UrlSafe(messageDetail.Payload.Body.Data);
-                            }
-                            catch (Exception ex)
-                            {
-                                _logger.LogWarning("Failed to decode email body: {Error}", ex.Message);
-                                email.Body = "[Body could not be decoded]";
-                            }
-                        }
-
-                        emails.Add(email);
                     }
+                    else if (message.Payload.Body?.Data != null)
+                    {
+                        // Handle simple message
+                        try
+                        {
+                            body = DecodeBase64UrlSafe(message.Payload.Body.Data);
+                        }
+                        catch (Exception ex)
+                        {
+                            _logger.LogWarning("Failed to decode email body: {Error}", ex.Message);
+                            body = "[Body could not be decoded]";
+                        }
+                    }
+
+                    email.Body = body;
+                    emails.Add(email);
                 }
                 catch (Exception ex)
                 {
-                    _logger.LogError(ex, "Error processing email message {MessageId}", message.Id);
-
+                    _logger.LogError(ex, "Error processing email message {MessageId}", messageRef.Id);
                 }
             }
 
             return emails;
-        }
-        catch (JsonException jsonEx)
-        {
-            _logger.LogError(jsonEx, "JSON deserialization error in GetGmailMessages");
-            throw;
         }
         catch (Exception ex)
         {
@@ -308,11 +297,11 @@ public class GmailController : ControllerBase
         }
     }
 
-    private string GetHeaderValue(GmailMessageDetail message, string headerName)
+    private string GetHeader(IList<MessagePartHeader> headers, string headerName)
     {
         try
         {
-            return message.Payload?.Headers?.FirstOrDefault(h =>
+            return headers?.FirstOrDefault(h =>
                 string.Equals(h.Name, headerName, StringComparison.OrdinalIgnoreCase))?.Value ?? string.Empty;
         }
         catch (Exception ex)
