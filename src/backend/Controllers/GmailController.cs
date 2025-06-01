@@ -77,13 +77,13 @@ public class GmailController : ControllerBase
                 {
                     var bufferTimespan = TimeSpan.FromMinutes(5);
                     var currentTimeWithBuffer = DateTime.UtcNow.Add(bufferTimespan);
-                    
+
                     if (expiresAt > currentTimeWithBuffer)
                     {
                         _logger.LogInformation("Using existing valid Google token that expires at {ExpiryTime}", expiresAt);
                         return accessToken;
                     }
-                    
+
                     _logger.LogInformation("Google token expired or about to expire at {ExpiryTime}, refreshing", expiresAt);
                 }
             }
@@ -102,7 +102,7 @@ public class GmailController : ControllerBase
 
                 var newExpiresAt = DateTime.UtcNow.AddSeconds(newTokens.ExpiresIn);
                 await _userManager.SetAuthenticationTokenAsync(user, "Google", "expires_at", newExpiresAt.ToString("O"));
-                
+
                 _logger.LogInformation("Successfully refreshed Google token, new expiry at {ExpiryTime}", newExpiresAt);
                 return newTokens.AccessToken;
             }
@@ -142,12 +142,12 @@ public class GmailController : ControllerBase
 
             _logger.LogInformation("Attempting to refresh Google access token");
             var response = await httpClient.PostAsync("https://oauth2.googleapis.com/token", tokenRequest);
-            
+
             var responseContent = await response.Content.ReadAsStringAsync();
-            
+
             if (!response.IsSuccessStatusCode)
             {
-                _logger.LogError("Failed to refresh Google token: Status {StatusCode}, Response: {ErrorContent}", 
+                _logger.LogError("Failed to refresh Google token: Status {StatusCode}, Response: {ErrorContent}",
                     response.StatusCode, responseContent);
                 return null;
             }
@@ -157,15 +157,15 @@ public class GmailController : ControllerBase
                 PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower,
                 PropertyNameCaseInsensitive = true
             };
-            
+
             var tokenResponse = JsonSerializer.Deserialize<GoogleTokenResponse>(responseContent, options);
-            
+
             if (tokenResponse == null || string.IsNullOrEmpty(tokenResponse.AccessToken))
             {
                 _logger.LogError("Received invalid token response from Google");
                 return null;
             }
-            
+
             _logger.LogInformation("Successfully refreshed Google access token");
             return tokenResponse;
         }
@@ -174,7 +174,7 @@ public class GmailController : ControllerBase
             _logger.LogError(ex, "Network error occurred while refreshing Google token");
             return null;
         }
-        catch (JsonException ex) 
+        catch (JsonException ex)
         {
             _logger.LogError(ex, "Failed to parse Google token response");
             return null;
