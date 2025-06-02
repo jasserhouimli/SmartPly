@@ -69,7 +69,7 @@ public static class DependencyInjection
             });
 
         builder.Services.AddTransient<TokenProvider>();
-        
+
         builder.Services.AddHttpClient();
 
         return builder;
