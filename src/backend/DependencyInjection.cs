@@ -14,9 +14,8 @@ public static class DependencyInjection
     public static WebApplicationBuilder AddControllers(this WebApplicationBuilder builder)
     {
         builder.Services.AddControllers();
-
         builder.Services.AddOpenApi();
-
+        builder.Services.AddScoped<IGoogleProvider, GoogleProvider>();
         builder.Services.AddCors(options =>
         {
             options.AddPolicy("AllowFrontend", policy =>
