@@ -48,7 +48,7 @@ export default function App() {
     try {
       setAuthState((prev) => ({ ...prev, isLoading: true }));
       const response = await fetch(
-        "http://localhost:500/auth/google/authorize",
+        "http://localhost:5000/auth/google/authorize",
       );
 
       if (!response.ok) {
