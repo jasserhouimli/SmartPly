@@ -16,7 +16,8 @@ public interface IAuthService
     Task<AuthResult> LoginAsync(LoginUserDto dto);
     Task<AuthResult> RefreshTokenAsync(RefreshTokenDto dto);
     string GetGoogleAuthorizationUrl();
-    Task<string> HandleGoogleCallbackAsync(string code, string state, string? error);
+    Task SaveCookies(AccessTokensDto accessToken);
+    Task<string> HandleGoogleCallbackAsync(HttpContext context, string code, string state, string? error);
 }
 
 public sealed class AuthService(
@@ -25,9 +26,13 @@ public sealed class AuthService(
     ApplicationDbContext db,
     IOptions<JwtAuthOptions> options,
     IGoogleProvider googleProvider,
+    IHttpContextAccessor contextAccessor,
     IConfiguration configuration) : IAuthService
 {
     private readonly JwtAuthOptions _jwtOptions = options.Value;
+    private readonly HttpContext _context = contextAccessor.HttpContext!;
+
+
 
     public async Task<AuthResult> RegisterAsync(RegisterUserDto dto)
     {
@@ -46,7 +51,7 @@ public sealed class AuthService(
 
         var tokens = tokenProvider.Create(new TokenRequest(user.Id, user.Email!));
         await tokenProvider.StoreRefreshTokenAsync(user, tokens.RefreshToken, _jwtOptions.RefreshTokenExpirationDays);
-
+        await SaveCookies(tokens);
         return new AuthSuccess(tokens);
     }
 
@@ -59,17 +64,25 @@ public sealed class AuthService(
         }
 
         var tokens = tokenProvider.Create(new TokenRequest(user.Id, user.Email!));
-        await tokenProvider.StoreRefreshTokenAsync(user, tokens.RefreshToken, _jwtOptions.RefreshTokenExpirationDays);
 
+
+        await tokenProvider.StoreRefreshTokenAsync(user, tokens.RefreshToken, _jwtOptions.RefreshTokenExpirationDays);
+        await SaveCookies(tokens);
         return new AuthSuccess(tokens);
     }
 
     public async Task<AuthResult> RefreshTokenAsync(RefreshTokenDto dto)
     {
         var newTokens = await tokenProvider.RefreshTokensAsync(dto.RefreshToken);
-        return newTokens == null
-            ? new AuthFailure("Refresh token invalid or expired.")
-            : new AuthSuccess(newTokens);
+        if (newTokens != null)
+        {
+            await SaveCookies(newTokens);
+            return new AuthSuccess(newTokens);
+        }
+        else
+        {
+            return new AuthFailure("Refresh token invalid or expired.");
+        }
     }
 
     public string GetGoogleAuthorizationUrl()
@@ -77,7 +90,31 @@ public sealed class AuthService(
         return googleProvider.GetAuthorizationUrl();
     }
 
-    public async Task<string> HandleGoogleCallbackAsync(string code, string state, string? error)
+
+
+    public Task SaveCookies(AccessTokensDto accesToken)
+    {
+
+        _context.Response.Cookies.Append("access_token", accesToken.AccessToken, new CookieOptions
+        {
+            HttpOnly = true,
+            Secure = true,
+            SameSite = SameSiteMode.Strict,
+            Expires = DateTime.UtcNow.AddMinutes(_jwtOptions.ExpirationInMinutes)
+        });
+
+        _context.Response.Cookies.Append("refresh_token", accesToken.RefreshToken, new CookieOptions
+        {
+            HttpOnly = true,
+            Secure = true,
+            SameSite = SameSiteMode.Strict,
+            Expires = DateTime.UtcNow.AddDays(_jwtOptions.RefreshTokenExpirationDays)
+        });
+
+        return Task.CompletedTask;
+    }
+
+    public async Task<string> HandleGoogleCallbackAsync(HttpContext context, string code, string state, string? error)
     {
         if (!string.IsNullOrEmpty(error))
             throw new AuthException($"Google authorization error: {error}");
@@ -94,9 +131,9 @@ public sealed class AuthService(
         var accessTokens = tokenProvider.Create(new TokenRequest(user.Id, user.Email!));
         await tokenProvider.StoreRefreshTokenAsync(user, accessTokens.RefreshToken, _jwtOptions.RefreshTokenExpirationDays);
 
-        return $"{configuration["FrontEnd:BaseUrl"]}?" +
-               $"access_token={accessTokens.AccessToken}&" +
-               $"refresh_token={accessTokens.RefreshToken}";
+        await SaveCookies(accessTokens);
+
+        return $"{configuration["FrontEnd:BaseUrl"]}";
     }
 
     private async Task<User> FindOrCreateUserAsync(GoogleUserInfo googleUser)

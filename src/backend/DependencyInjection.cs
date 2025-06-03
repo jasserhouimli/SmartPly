@@ -11,13 +11,13 @@ using backend.Entities;
 
 public static class DependencyInjection
 {
+
+
+
     public static WebApplicationBuilder AddControllers(this WebApplicationBuilder builder)
     {
         builder.Services.AddControllers();
         builder.Services.AddOpenApi();
-        builder.Services.AddScoped<IGoogleProvider, GoogleProvider>();
-        builder.Services.AddScoped<IAuthService, AuthService>();
-        builder.Services.AddScoped<ITokenProvider, TokenProvider>();
         builder.Services.AddCors(options =>
         {
             options.AddPolicy("AllowFrontend", policy =>
@@ -31,6 +31,18 @@ public static class DependencyInjection
 
         return builder;
     }
+
+    public static WebApplicationBuilder AddServices(this WebApplicationBuilder builder)
+    {
+        builder.Services.AddScoped<IGoogleProvider, GoogleProvider>(); // GOOGLE SERVICE
+        builder.Services.AddScoped<IAuthService, AuthService>(); // AUTH SERVICE
+        builder.Services.AddScoped<ITokenProvider, TokenProvider>(); // TOKEN SERVICE
+        builder.Services.AddHttpContextAccessor();
+        return builder;
+    }
+
+
+
 
     public static WebApplicationBuilder AddAuthentication(this WebApplicationBuilder builder)
     {
@@ -60,6 +72,14 @@ public static class DependencyInjection
                     ValidAudience = jwtAuthOptions.Audience,
                     IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtAuthOptions.Key)),
 
+                };
+                options.Events = new JwtBearerEvents
+                {
+                    OnMessageReceived = context =>
+                    {
+                        context.Token = context.Request.Cookies["access_token"];
+                        return Task.CompletedTask;
+                    }
                 };
             })
             .AddGoogle(options =>

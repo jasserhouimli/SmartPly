@@ -13,35 +13,25 @@ export default function App() {
   });
 
   useEffect(() => {
-    const urlParams = new URLSearchParams(window.location.search);
-    const accessToken =
-      urlParams.get("access_token") || localStorage.getItem("accessToken");
+    // Call a protected endpoint to verify authentication
+    const checkAuth = async () => {
+      try {
+        const response = await fetch("http://localhost:5000/auth/me", {
+          credentials: "include",
+        });
 
-    if (accessToken) {
-      setAuthState({
-        isAuthenticated: true,
-        isLoading: false,
-      });
-
-      if (urlParams.get("access_token")) {
-        localStorage.setItem("accessToken", urlParams.get("access_token")!);
-
-        if (urlParams.get("refresh_token")) {
-          localStorage.setItem("refreshToken", urlParams.get("refresh_token")!);
+        if (response.ok) {
+          setAuthState({ isAuthenticated: true, isLoading: false });
+        } else {
+          setAuthState({ isAuthenticated: false, isLoading: false });
         }
-
-        window.history.replaceState(
-          {},
-          document.title,
-          window.location.pathname,
-        );
+      } catch (error) {
+        console.error("Auth check failed", error);
+        setAuthState({ isAuthenticated: false, isLoading: false });
       }
-    } else {
-      setAuthState({
-        isAuthenticated: false,
-        isLoading: false,
-      });
-    }
+    };
+
+    checkAuth();
   }, []);
 
   const handleGoogleLogin = async () => {
@@ -63,13 +53,20 @@ export default function App() {
     }
   };
 
-  const handleLogout = () => {
-    localStorage.removeItem("accessToken");
-    localStorage.removeItem("refreshToken");
-    setAuthState({
-      isAuthenticated: false,
-      isLoading: false,
-    });
+  const handleLogout = async () => {
+    try {
+      await fetch("http://localhost:5000/auth/logout", {
+        method: "POST",
+        credentials: "include",
+      });
+
+      setAuthState({
+        isAuthenticated: false,
+        isLoading: false,
+      });
+    } catch (err) {
+      console.error("Logout failed", err);
+    }
   };
 
   if (authState.isLoading) {

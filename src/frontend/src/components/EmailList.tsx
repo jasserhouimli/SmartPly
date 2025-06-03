@@ -12,22 +12,18 @@ export function EmailList() {
       setLoading(true);
       setError(null);
 
-      // Get access token from URL parameters or localStorage
-      const urlParams = new URLSearchParams(window.location.search);
-      const accessToken =
-        urlParams.get("access_token") || localStorage.getItem("accessToken");
+      // No need to read access token from URL or localStorage
+      // We'll rely on HttpOnly cookies sent automatically by the browser
 
-      if (!accessToken) {
-        setError("Not authenticated. Please sign in with Google.");
+      const response = await fetch("http://localhost:5000/gmail/messages", {
+        credentials: "include", // IMPORTANT: send cookies with request
+      });
+
+      if (response.status === 401) {
+        setError("Session expired or not authenticated. Please sign in again.");
         setLoading(false);
         return;
       }
-
-      const response = await fetch("http://localhost:5000/gmail/messages", {
-        headers: {
-          Authorization: `Bearer ${accessToken}`,
-        },
-      });
 
       if (!response.ok) {
         throw new Error(`Failed to fetch emails: ${response.statusText}`);
@@ -43,18 +39,8 @@ export function EmailList() {
   };
 
   useEffect(() => {
-    const urlParams = new URLSearchParams(window.location.search);
-    const accessToken = urlParams.get("access_token");
-    const refreshToken = urlParams.get("refresh_token");
-
-    if (accessToken) {
-      localStorage.setItem("accessToken", accessToken);
-      window.history.replaceState({}, document.title, window.location.pathname);
-    }
-
-    if (refreshToken) {
-      localStorage.setItem("refreshToken", refreshToken);
-    }
+    // Remove token storage from URL/localStorage here too
+    // We rely on cookies
 
     fetchEmails();
   }, []);
